@@ -7,6 +7,7 @@ Multi-module project that links Paper backend servers through **Redis**:
 - **Player-specific messages** — targeted messages can reach a player on another linked backend.
 - **Shared tab list** — header/footer shows network-wide online players (Velocity publishes presence).
 - **Velocity utilities** — `/find`, `/lobby`, `/hub`, `/discord`, domain routing, plugin-message transfers.
+- **Per-domain MOTD** — different server-list description, hover box, player count, fake version, and favicon per hostname, with feature toggles throughout so unused parts cost nothing.
 
 ## Modules
 
@@ -105,6 +106,90 @@ network-sync:
 - **`linked-servers`**: Velocity server names (from `velocity.toml`) that share chat and tab list. **Configure this only on Velocity** — Paper backends receive the list automatically via Redis. Leave empty or omit to link every backend.
 
 Velocity publishes when players join, quit, or switch backend servers. Paper backends use this for the shared tab list.
+
+### Feature toggles (`plugins/robin-velocity-manager/config.yml`)
+
+Turn off anything you don't use so the plugin does less work at runtime:
+
+```yaml
+features:
+  domain-routing: true
+  discord-command: true
+  lobby-hub-commands: true
+```
+
+- **`domain-routing`** — master switch for routing players by `domain-servers` (above).
+- **`discord-command`** — enables/disables `/discord`.
+- **`lobby-hub-commands`** — enables/disables `/lobby` and `/hub`.
+- `/find` and `/velocitymanager reload` are always available.
+- The MOTD feature (below) has its own master switch in `motd.yml`, not here.
+
+## Per-domain MOTD (`plugins/robin-velocity-manager/motd.yml`)
+
+Shows a different server-list description, hover box, player count, fake version, and favicon
+depending on the hostname a player connected with — the same domain concept as `domain-servers`,
+but for the ping instead of routing. Matching is **exact** (lowercase, port stripped).
+
+```yaml
+enabled: true
+
+default:
+  favicon:
+    enabled: false
+    mode: SINGLE   # SINGLE = files[0]; RANDOM = a random entry from files on every ping
+    files: []
+  version:
+    name:
+      enabled: true
+      text: "<gradient:#00c6ff:#0072ff>AvesClub Network</gradient>"
+    protocol:
+      enabled: false
+      value: -1
+  player-count:
+    hide: false
+    online-override:
+      enabled: false
+      value: 0
+    max-override:
+      enabled: false
+      value: 0
+  hover:
+    enabled: true
+    vanilla: false   # false = show the custom `lines:` below instead of real sample players
+    lines:
+      - "&7Online: &f<online>&7/&f<max>"
+      - "&7Lobby: &f<online_lobby> &8| &7Bedwars: &f<online_bedwars>"
+  description:
+    enabled: true
+    lines:
+      - "<center><gradient:#00c6ff:#0072ff><bold>AVESCLUB</bold></gradient>"
+
+domains:
+  bedwars.avesclub.net:
+    # Anything omitted here (a whole section, or one field inside it) is inherited from
+    # `default:` above — not from a hardcoded plugin default.
+    hover:
+      lines:
+        - "&7Bedwars players: &f<online_bedwars>"
+    description:
+      lines:
+        - "<center><gradient:#ff8a00:#e52e71><bold>BEDWARS</bold></gradient>"
+```
+
+- **`enabled: false`** turns the whole feature off — Velocity's normal ping is left untouched.
+- Text fields accept **both** legacy `&` codes (including `&#RRGGBB` hex) **and** full MiniMessage
+  tags in the same string — legacy codes are converted to MiniMessage tags first, so
+  `"&aHello <gradient:#00c6ff:#0072ff>World</gradient>"` works as-is.
+- **Placeholders** (usable in `description.lines`, `hover.lines`, `version.name.text`):
+  - `<online>` / `<max>` — network-wide online/max count (or this profile's override value)
+  - `<online_SERVERNAME>` — live online count on one backend server, e.g. `<online_lobby>`,
+    `<online_bedwars>` — generated automatically for every server in `velocity.toml`
+  - `<newline>` — splits one YAML string into an extra display line
+  - `<center>` — must be the first thing in a line; approximately centers it (pixel-width
+    approximation of the vanilla font, not pixel-perfect)
+- **Favicons**: PNG files placed in `plugins/robin-velocity-manager/favicons/`, referenced by
+  filename. Missing/invalid files just log a warning and are skipped.
+- Reload with `/velocitymanager reload` after editing `motd.yml`.
 
 ### Paper (`plugins/robin-paper-bridge/config.yml`)
 
@@ -237,3 +322,11 @@ robin-velocity-manager ──publish──► Redis (presence channel)
 - Plugin `/msg` commands that use `player.sendMessage()` directly are not auto-synced unless they use `sendToNetworkPlayer()` or chat with a limited viewer set.
 - On startup, each Paper backend requests a full player snapshot from Velocity.
 - Redis and SnakeYAML/Lettuce/Gson are bundled in both plugin jars (shaded).
+
+## Credits
+
+The per-domain MOTD feature's config layout, placeholder style, and ping-manipulation approach
+were inspired by [PistonMOTD](https://github.com/AlexProgrammerDE/PistonMOTD) (Apache-2.0), an
+open-source multi-platform MOTD plugin by AlexProgrammerDE. This project's implementation is a
+from-scratch rewrite for Velocity only, using SnakeYAML and MiniMessage directly rather than
+PistonMOTD's own config/serialization stack.

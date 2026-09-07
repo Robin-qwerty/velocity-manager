@@ -1,0 +1,89 @@
+# motd.yml - Per-domain server list (MOTD) customization for robin-velocity-manager.
+#
+# Controls what players see in the multiplayer server list (description, player count,
+# hover box, fake version, and favicon) based on the hostname they connected with. Matching
+# is EXACT (lowercase, port stripped) - the same normalization domain-servers uses in
+# config.yml. No entry under `domains:` below -> the `default:` profile applies.
+#
+# `enabled: false` turns the whole feature off; Velocity's normal ping (from velocity.toml)
+# is left completely untouched.
+#
+# Text fields support BOTH legacy "&" codes (including hex: &#RRGGBB) AND full MiniMessage
+# tags in the SAME string - legacy codes are converted to MiniMessage tags first, then the
+# whole string is parsed as MiniMessage, so gradients, <rainbow>, <bold>, etc. all work
+# alongside plain "&a" style codes, e.g.:
+#   "&aHello <gradient:#00c6ff:#0072ff>World</gradient>"
+#
+# Placeholders (substituted as plain text BEFORE color/MiniMessage parsing) - usable in
+# description.lines, hover.lines, and version.name.text:
+#   <online>              network-wide online count (or this profile's online-override value)
+#   <max>                 network-wide max count (or this profile's max-override value)
+#   <online_SERVERNAME>   live online count on one backend server, e.g. <online_lobby>,
+#                         <online_bedwars> - generated automatically for every server
+#                         registered in velocity.toml, not just ones mentioned here
+#   <newline>             splits this single YAML string into an additional display line
+#   <center>              must be the FIRST thing in a line; approximately centers it using
+#                         a built-in default-Minecraft-font pixel-width table. This is an
+#                         approximation, not pixel-perfect, and ignores resource-pack fonts.
+#
+# Favicons: PNG files placed in <plugin-data-folder>/favicons/, referenced below by filename.
+# Missing/invalid files are skipped with a warning in the proxy log and never crash a ping.
+
+enabled: true
+
+# Used for any hostname with no entry under `domains:`, and inherited section-by-section /
+# field-by-field by any domain entry that doesn't fully override it.
+default:
+  favicon:
+    enabled: false
+    mode: SINGLE   # SINGLE = files[0]; RANDOM = a random entry from files on every ping
+    files: []
+
+  version:
+    name:
+      enabled: true
+      text: "<gradient:#00c6ff:#0072ff>AvesClub Network</gradient>"
+    protocol:
+      enabled: false
+      value: -1
+
+  player-count:
+    hide: false
+    online-override:
+      enabled: false
+      value: 0
+    max-override:
+      enabled: false
+      value: 0
+
+  hover:
+    enabled: true
+    vanilla: false        # false = show the custom `lines:` below instead of real sample players
+    lines:
+      - "&7Online: &f<online>&7/&f<max>"
+      - "&7Lobby: &f<online_lobby> &8| &7Bedwars: &f<online_bedwars>"
+      - "<rainbow>Thanks for playing!</rainbow>"
+
+  description:
+    enabled: true
+    lines:
+      - "<center><gradient:#00c6ff:#0072ff><bold>AVESCLUB</bold></gradient>"
+      - "<center><rainbow>~ play.avesclub.net ~</rainbow>"
+
+# Per-domain overrides, keyed by the hostname a player connected with (exact match only).
+# Anything omitted here - a whole section or a single field inside one - is inherited from
+# `default:` above, not from any hardcoded plugin default.
+domains:
+  bedwars.avesclub.net:
+    # favicon, version, and player-count are not listed -> fully inherited from `default:`.
+    hover:
+      enabled: true
+      vanilla: false
+      lines:
+        - "&7Bedwars players: &f<online_bedwars>"
+        - "<gradient:#ff8a00:#e52e71>Good luck, have fun!</gradient>"
+    description:
+      enabled: true
+      lines:
+        - "<center><gradient:#ff8a00:#e52e71><bold>BEDWARS</bold></gradient>"
+        - "<center>&7<online_bedwars> &7players building and breaking beds"

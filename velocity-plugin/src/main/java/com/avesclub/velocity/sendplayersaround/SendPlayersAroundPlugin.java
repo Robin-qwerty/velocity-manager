@@ -24,7 +24,6 @@ import net.kyori.adventure.text.event.HoverEvent;
 import org.slf4j.Logger;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
@@ -51,8 +50,10 @@ public final class SendPlayersAroundPlugin {
     private final Path dataDirectory;
     private final NetworkSyncService networkSyncService;
     private final VelocityNetworkUiService networkUiService;
+    private final MotdListener motdListener;
     private MinecraftChannelIdentifier channelIdentifier;
     private PluginConfig config;
+    private MotdConfig motdConfig;
 
     @Inject
     public SendPlayersAroundPlugin(ProxyServer proxyServer, Logger logger, @DataDirectory Path dataDirectory) {
@@ -61,6 +62,7 @@ public final class SendPlayersAroundPlugin {
         this.dataDirectory = dataDirectory;
         this.networkSyncService = new NetworkSyncService(proxyServer, logger);
         this.networkUiService = new VelocityNetworkUiService(proxyServer, logger);
+        this.motdListener = new MotdListener(proxyServer, logger, dataDirectory);
     }
 
     @Subscribe
@@ -68,6 +70,7 @@ public final class SendPlayersAroundPlugin {
         loadConfig();
         proxyServer.getEventManager().register(this, networkSyncService);
         proxyServer.getEventManager().register(this, networkUiService);
+        proxyServer.getEventManager().register(this, motdListener);
 
         channelIdentifier = MinecraftChannelIdentifier.from(CHANNEL_NAME);
         proxyServer.getChannelRegistrar().register(channelIdentifier);
@@ -114,19 +117,34 @@ public final class SendPlayersAroundPlugin {
                     List.of(),
                     true,
                     true,
-                    "&a{player} &7({server})"
+                    "&a{player} &7({server})",
+                    true,
+                    true,
+                    true
             );
         }
         networkSyncService.start(config.redis(), config.publishPresence(), config.linkedServers());
         networkUiService.applyConfig(config);
+
+        try {
+            MotdConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
+            this.motdConfig = MotdConfig.load(dataDirectory);
+            logger.info("Loaded motd.yml: {} ({} domain profile(s))",
+                    motdConfig.enabled() ? "enabled" : "disabled",
+                    motdConfig.domainProfiles().size());
+        } catch (IOException e) {
+            logger.error("Failed to load motd.yml; MOTD customization disabled", e);
+            this.motdConfig = MotdConfig.defaults();
+        }
+        motdListener.applyConfig(motdConfig);
     }
 
     @Subscribe
     public void onPlayerChooseInitialServer(PlayerChooseInitialServerEvent event) {
-        if (config == null || config.domainServers().isEmpty()) {
+        if (config == null || !config.domainRoutingEnabled() || config.domainServers().isEmpty()) {
             return;
         }
-        String host = handshakeHost(event.getPlayer());
+        String host = HostUtil.hostFromPlayer(event.getPlayer());
         if (host.isEmpty()) {
             return;
         }
@@ -143,58 +161,39 @@ public final class SendPlayersAroundPlugin {
         logger.debug("Routing {} from host '{}' to server '{}'", event.getPlayer().getUsername(), host, targetName);
     }
 
-    private static String handshakeHost(Player player) {
-        Optional<String> raw = player.getRawVirtualHost();
-        if (raw.isPresent()) {
-            String s = raw.get().trim().toLowerCase(Locale.ROOT);
-            return stripHostPort(s);
-        }
-        return player.getVirtualHost()
-                .map(InetSocketAddress::getHostString)
-                .map(h -> h.toLowerCase(Locale.ROOT))
-                .orElse("");
-    }
-
-    private static String stripHostPort(String hostWithPossiblePort) {
-        if (hostWithPossiblePort.isEmpty()) {
-            return hostWithPossiblePort;
-        }
-        if (hostWithPossiblePort.startsWith("[")) {
-            int close = hostWithPossiblePort.indexOf(']');
-            if (close != -1 && hostWithPossiblePort.length() > close + 1
-                    && hostWithPossiblePort.charAt(close + 1) == ':') {
-                return hostWithPossiblePort.substring(1, close).toLowerCase(Locale.ROOT);
-            }
-            return hostWithPossiblePort;
-        }
-        int colon = hostWithPossiblePort.lastIndexOf(':');
-        if (colon > 0) {
-            String tail = hostWithPossiblePort.substring(colon + 1);
-            if (tail.chars().allMatch(Character::isDigit)) {
-                return hostWithPossiblePort.substring(0, colon);
-            }
-        }
-        return hostWithPossiblePort;
-    }
-
     private void reloadConfig(CommandSource feedback) {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
             this.config = PluginConfig.load(dataDirectory);
             networkSyncService.start(config.redis(), config.publishPresence(), config.linkedServers());
             networkUiService.applyConfig(config);
-            feedback.sendMessage(Component.text(
-                    "Reloaded config: lobby '" + config.lobbyServer() + "', "
-                            + config.domainServers().size() + " domain route(s), redis "
-                            + (config.redis().enabled() ? "enabled" : "disabled")
-                            + ", linked servers "
-                            + (config.linkedServers().isEmpty() ? "all" : config.linkedServers()) + "."));
-            String who = feedback instanceof Player p ? p.getUsername() : "console";
-            logger.info("{} reloaded robin-velocity-manager config", who);
         } catch (IOException e) {
             logger.error("Config reload failed", e);
             feedback.sendMessage(Component.text("Config reload failed; check the proxy log."));
+            return;
         }
+
+        try {
+            MotdConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
+            this.motdConfig = MotdConfig.load(dataDirectory);
+        } catch (IOException e) {
+            logger.error("motd.yml reload failed; MOTD customization disabled", e);
+            this.motdConfig = MotdConfig.defaults();
+        }
+        motdListener.applyConfig(motdConfig);
+
+        feedback.sendMessage(Component.text(
+                "Reloaded config: lobby '" + config.lobbyServer() + "', "
+                        + config.domainServers().size() + " domain route(s), redis "
+                        + (config.redis().enabled() ? "enabled" : "disabled")
+                        + ", linked servers "
+                        + (config.linkedServers().isEmpty() ? "all" : config.linkedServers())
+                        + ", motd " + (motdConfig.enabled()
+                                ? "enabled (" + motdConfig.domainProfiles().size() + " domain profile(s))"
+                                : "disabled")
+                        + "."));
+        String who = feedback instanceof Player p ? p.getUsername() : "console";
+        logger.info("{} reloaded robin-velocity-manager config", who);
     }
 
     @Subscribe
@@ -368,6 +367,10 @@ public final class SendPlayersAroundPlugin {
                 source.sendMessage(Component.text("Plugin configuration is not loaded."));
                 return;
             }
+            if (!cfg.discordCommandEnabled()) {
+                source.sendMessage(Component.text("The Discord command is currently disabled."));
+                return;
+            }
             Component link = Component.text(cfg.discordLinkText())
                     .clickEvent(ClickEvent.openUrl(cfg.discordUrl()))
                     .hoverEvent(HoverEvent.showText(Component.text("Click to open Discord")));
@@ -426,6 +429,10 @@ public final class SendPlayersAroundPlugin {
             PluginConfig cfg = SendPlayersAroundPlugin.this.config;
             if (cfg == null) {
                 player.sendMessage(Component.text("Plugin configuration is not loaded."));
+                return;
+            }
+            if (!cfg.lobbyHubCommandsEnabled()) {
+                player.sendMessage(Component.text("This command is currently disabled."));
                 return;
             }
             String lobbyName = cfg.lobbyServer();

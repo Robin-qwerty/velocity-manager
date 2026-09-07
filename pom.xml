@@ -26,6 +26,7 @@
         <lettuce.version>6.3.2.RELEASE</lettuce.version>
         <gson.version>2.11.0</gson.version>
         <snakeyaml.version>2.2</snakeyaml.version>
+        <adventure.minimessage.version>4.26.1</adventure.minimessage.version>
     </properties>
 
     <dependencyManagement>
@@ -49,6 +50,11 @@
                 <groupId>org.yaml</groupId>
                 <artifactId>snakeyaml</artifactId>
                 <version>${snakeyaml.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.kyori</groupId>
+                <artifactId>adventure-text-minimessage</artifactId>
+                <version>${adventure.minimessage.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

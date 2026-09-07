@@ -34,6 +34,9 @@ public final class PluginConfig {
     private final boolean tabListEnabled;
     private final boolean chatCompletionsEnabled;
     private final String tabPlayerLine;
+    private final boolean domainRoutingEnabled;
+    private final boolean discordCommandEnabled;
+    private final boolean lobbyHubCommandsEnabled;
 
     public PluginConfig(
             String lobbyServer,
@@ -46,7 +49,10 @@ public final class PluginConfig {
             List<String> linkedServers,
             boolean tabListEnabled,
             boolean chatCompletionsEnabled,
-            String tabPlayerLine
+            String tabPlayerLine,
+            boolean domainRoutingEnabled,
+            boolean discordCommandEnabled,
+            boolean lobbyHubCommandsEnabled
     ) {
         this.lobbyServer = lobbyServer == null || lobbyServer.isBlank() ? "lobby" : lobbyServer.trim();
         this.domainServers = domainServers == null ? Map.of() : Map.copyOf(domainServers);
@@ -63,6 +69,9 @@ public final class PluginConfig {
         this.chatCompletionsEnabled = chatCompletionsEnabled;
         this.tabPlayerLine = tabPlayerLine == null || tabPlayerLine.isBlank()
                 ? "&a{player} &7({server})" : tabPlayerLine;
+        this.domainRoutingEnabled = domainRoutingEnabled;
+        this.discordCommandEnabled = discordCommandEnabled;
+        this.lobbyHubCommandsEnabled = lobbyHubCommandsEnabled;
     }
 
     public String lobbyServer() {
@@ -110,6 +119,18 @@ public final class PluginConfig {
 
     public String tabPlayerLine() {
         return tabPlayerLine;
+    }
+
+    public boolean domainRoutingEnabled() {
+        return domainRoutingEnabled;
+    }
+
+    public boolean discordCommandEnabled() {
+        return discordCommandEnabled;
+    }
+
+    public boolean lobbyHubCommandsEnabled() {
+        return lobbyHubCommandsEnabled;
     }
 
     public static void ensureDefaultFile(Path dataDirectory, Class<?> resourceAnchor) throws IOException {
@@ -210,6 +231,15 @@ public final class PluginConfig {
                 chatCompletionsEnabled = Boolean.parseBoolean(completionsObj.toString());
             }
         }
+        boolean domainRoutingEnabled = true;
+        boolean discordCommandEnabled = true;
+        boolean lobbyHubCommandsEnabled = true;
+        Object rawFeatures = root.get("features");
+        if (rawFeatures instanceof Map<?, ?> features) {
+            domainRoutingEnabled = boolOrDefault(features.get("domain-routing"), true);
+            discordCommandEnabled = boolOrDefault(features.get("discord-command"), true);
+            lobbyHubCommandsEnabled = boolOrDefault(features.get("lobby-hub-commands"), true);
+        }
         return new PluginConfig(
                 lobby,
                 Collections.unmodifiableMap(domains),
@@ -221,8 +251,21 @@ public final class PluginConfig {
                 linkedServers,
                 tabListEnabled,
                 chatCompletionsEnabled,
-                tabPlayerLine
+                tabPlayerLine,
+                domainRoutingEnabled,
+                discordCommandEnabled,
+                lobbyHubCommandsEnabled
         );
+    }
+
+    private static boolean boolOrDefault(Object value, boolean fallback) {
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
+        if (value == null) {
+            return fallback;
+        }
+        return Boolean.parseBoolean(value.toString().trim());
     }
 
     private static List<String> parseLinkedServers(Object raw) {
@@ -245,7 +288,7 @@ public final class PluginConfig {
     private static PluginConfig defaults() {
         return new PluginConfig(
                 "lobby", Map.of(), null, null, null, RedisSettings.defaults(), true, List.of(),
-                true, true, "&a{player} &7({server})"
+                true, true, "&a{player} &7({server})", true, true, true
         );
     }
 }

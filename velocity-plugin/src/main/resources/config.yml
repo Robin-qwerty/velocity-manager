@@ -30,3 +30,11 @@ network-sync:
     enabled: true
     player-line: "&a{player} &7({server})"
   chat-completions: true
+
+# Individually toggle optional features without deleting their config sections above.
+# The MOTD feature's own master switch lives in motd.yml's top-level `enabled:` key,
+# not here (single source of truth).
+features:
+  domain-routing: true
+  discord-command: true
+  lobby-hub-commands: true
