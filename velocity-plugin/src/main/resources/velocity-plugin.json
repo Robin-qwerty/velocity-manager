@@ -1,0 +1,8 @@
+{
+  "id": "robin-velocity-manager",
+  "name": "robin-velocity-manager",
+  "version": "1.0.0",
+  "description": "Velocity proxy utilities and Redis network presence.",
+  "authors": ["Robinaves"],
+  "main": "com.avesclub.velocity.sendplayersaround.SendPlayersAroundPlugin"
+}

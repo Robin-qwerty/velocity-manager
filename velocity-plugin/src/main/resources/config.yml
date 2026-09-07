@@ -1,0 +1,32 @@
+# Velocity server name used by /lobby and /hub (must match a server in velocity.toml).
+lobby-server: lobby
+
+# Map hostname the player uses in the client (Server Address / handshake) to a Velocity server name.
+# Matching is case-insensitive. If no entry matches, Velocity uses its normal default try order.
+domain-servers:
+  bedwars.avesclub.net: bedwars
+
+# Shown when a player runs /discord. The link-text is clickable and opens url in the browser.
+discord:
+  message: "Join our Discord server!"
+  link-text: "discord.gg/avesclub"
+  url: "https://discord.gg/avesclub"
+
+# Redis bus shared with robin-paper-bridge on each backend.
+redis:
+  enabled: true
+  host: localhost
+  port: 6379
+  password: ""
+  channel-prefix: robin-network
+
+# Velocity publishes join / quit / server-switch events for tab list sync on Paper.
+network-sync:
+  publish-presence: true
+  linked-servers:
+    - lobby
+    - bedwars
+  tablist:
+    enabled: true
+    player-line: "&a{player} &7({server})"
+  chat-completions: true

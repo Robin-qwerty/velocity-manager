@@ -1,0 +1,16 @@
+# Build output
+target/
+*.class
+
+# IDE
+*.iml
+.idea/
+
+# Reference clone (see README credits) — not part of this project
+/PistonMOTD/
+
+# OS
+.DS_Store
+
+# Claude Code local/session settings (per-developer, not shared)
+.claude/settings.local.json*
