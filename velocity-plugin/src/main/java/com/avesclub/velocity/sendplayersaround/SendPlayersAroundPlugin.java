@@ -2,7 +2,6 @@ package com.avesclub.velocity.sendplayersaround;
 
 import com.google.common.io.ByteArrayDataInput;
 import com.google.common.io.ByteStreams;
-import com.avesclub.network.common.RedisSettings;
 import com.google.inject.Inject;
 import com.velocitypowered.api.command.CommandSource;
 import com.velocitypowered.api.command.SimpleCommand;
@@ -10,7 +9,6 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
-import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
@@ -48,8 +46,6 @@ public final class SendPlayersAroundPlugin {
     private final ProxyServer proxyServer;
     private final Logger logger;
     private final Path dataDirectory;
-    private final NetworkSyncService networkSyncService;
-    private final VelocityNetworkUiService networkUiService;
     private final MotdListener motdListener;
     private MinecraftChannelIdentifier channelIdentifier;
     private PluginConfig config;
@@ -60,16 +56,12 @@ public final class SendPlayersAroundPlugin {
         this.proxyServer = proxyServer;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
-        this.networkSyncService = new NetworkSyncService(proxyServer, logger);
-        this.networkUiService = new VelocityNetworkUiService(proxyServer, logger);
         this.motdListener = new MotdListener(proxyServer, logger, dataDirectory);
     }
 
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event) {
         loadConfig();
-        proxyServer.getEventManager().register(this, networkSyncService);
-        proxyServer.getEventManager().register(this, networkUiService);
         proxyServer.getEventManager().register(this, motdListener);
 
         channelIdentifier = MinecraftChannelIdentifier.from(CHANNEL_NAME);
@@ -90,20 +82,13 @@ public final class SendPlayersAroundPlugin {
         logger.info("Registered plugin messaging channel {}", CHANNEL_NAME);
     }
 
-    @Subscribe
-    public void onProxyShutdown(ProxyShutdownEvent event) {
-        networkSyncService.stop();
-    }
-
     private void loadConfig() {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
             this.config = PluginConfig.load(dataDirectory);
-            logger.info("Loaded config: lobby '{}', {} domain route(s), redis {}, linked servers {}",
+            logger.info("Loaded config: lobby '{}', {} domain route(s)",
                     config.lobbyServer(),
-                    config.domainServers().size(),
-                    config.redis().enabled() ? "enabled" : "disabled",
-                    config.linkedServers().isEmpty() ? "all" : config.linkedServers());
+                    config.domainServers().size());
         } catch (IOException e) {
             logger.error("Failed to load config.yml; using defaults", e);
             this.config = new PluginConfig(
@@ -112,19 +97,11 @@ public final class SendPlayersAroundPlugin {
                     null,
                     null,
                     null,
-                    RedisSettings.defaults(),
-                    true,
-                    List.of(),
-                    true,
-                    true,
-                    "&a{player} &7({server})",
                     true,
                     true,
                     true
             );
         }
-        networkSyncService.start(config.redis(), config.publishPresence(), config.linkedServers());
-        networkUiService.applyConfig(config);
 
         try {
             MotdConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
@@ -165,8 +142,6 @@ public final class SendPlayersAroundPlugin {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
             this.config = PluginConfig.load(dataDirectory);
-            networkSyncService.start(config.redis(), config.publishPresence(), config.linkedServers());
-            networkUiService.applyConfig(config);
         } catch (IOException e) {
             logger.error("Config reload failed", e);
             feedback.sendMessage(Component.text("Config reload failed; check the proxy log."));
@@ -184,10 +159,7 @@ public final class SendPlayersAroundPlugin {
 
         feedback.sendMessage(Component.text(
                 "Reloaded config: lobby '" + config.lobbyServer() + "', "
-                        + config.domainServers().size() + " domain route(s), redis "
-                        + (config.redis().enabled() ? "enabled" : "disabled")
-                        + ", linked servers "
-                        + (config.linkedServers().isEmpty() ? "all" : config.linkedServers())
+                        + config.domainServers().size() + " domain route(s)"
                         + ", motd " + (motdConfig.enabled()
                                 ? "enabled (" + motdConfig.domainProfiles().size() + " domain profile(s))"
                                 : "disabled")

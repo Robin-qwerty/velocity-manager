@@ -12,25 +12,6 @@ discord:
   link-text: "discord.gg/avesclub"
   url: "https://discord.gg/avesclub"
 
-# Redis bus shared with robin-paper-bridge on each backend.
-redis:
-  enabled: true
-  host: localhost
-  port: 6379
-  password: ""
-  channel-prefix: robin-network
-
-# Velocity publishes join / quit / server-switch events for tab list sync on Paper.
-network-sync:
-  publish-presence: true
-  linked-servers:
-    - lobby
-    - bedwars
-  tablist:
-    enabled: true
-    player-line: "&a{player} &7({server})"
-  chat-completions: true
-
 # Individually toggle optional features without deleting their config sections above.
 # The MOTD feature's own master switch lives in motd.yml's top-level `enabled:` key,
 # not here (single source of truth).

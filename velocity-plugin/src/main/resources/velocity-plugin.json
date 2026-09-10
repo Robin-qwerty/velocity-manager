@@ -2,7 +2,7 @@
   "id": "robin-velocity-manager",
   "name": "robin-velocity-manager",
   "version": "1.0.0",
-  "description": "Velocity proxy utilities and Redis network presence.",
+  "description": "Domain routing, per-domain MOTD, and utility commands.",
   "authors": ["Robinaves"],
   "main": "com.avesclub.velocity.sendplayersaround.SendPlayersAroundPlugin"
 }

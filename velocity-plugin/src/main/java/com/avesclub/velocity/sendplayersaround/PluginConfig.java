@@ -1,16 +1,13 @@
 package com.avesclub.velocity.sendplayersaround;
 
-import com.avesclub.network.common.RedisSettings;
 import org.yaml.snakeyaml.Yaml;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -28,12 +25,6 @@ public final class PluginConfig {
     private final String discordMessage;
     private final String discordLinkText;
     private final String discordUrl;
-    private final RedisSettings redis;
-    private final boolean publishPresence;
-    private final List<String> linkedServers;
-    private final boolean tabListEnabled;
-    private final boolean chatCompletionsEnabled;
-    private final String tabPlayerLine;
     private final boolean domainRoutingEnabled;
     private final boolean discordCommandEnabled;
     private final boolean lobbyHubCommandsEnabled;
@@ -44,12 +35,6 @@ public final class PluginConfig {
             String discordMessage,
             String discordLinkText,
             String discordUrl,
-            RedisSettings redis,
-            boolean publishPresence,
-            List<String> linkedServers,
-            boolean tabListEnabled,
-            boolean chatCompletionsEnabled,
-            String tabPlayerLine,
             boolean domainRoutingEnabled,
             boolean discordCommandEnabled,
             boolean lobbyHubCommandsEnabled
@@ -62,13 +47,6 @@ public final class PluginConfig {
                 ? DEFAULT_DISCORD_LINK_TEXT : discordLinkText.trim();
         this.discordUrl = discordUrl == null || discordUrl.isBlank()
                 ? DEFAULT_DISCORD_URL : discordUrl.trim();
-        this.redis = redis == null ? RedisSettings.defaults() : redis;
-        this.publishPresence = publishPresence;
-        this.linkedServers = linkedServers == null ? List.of() : List.copyOf(linkedServers);
-        this.tabListEnabled = tabListEnabled;
-        this.chatCompletionsEnabled = chatCompletionsEnabled;
-        this.tabPlayerLine = tabPlayerLine == null || tabPlayerLine.isBlank()
-                ? "&a{player} &7({server})" : tabPlayerLine;
         this.domainRoutingEnabled = domainRoutingEnabled;
         this.discordCommandEnabled = discordCommandEnabled;
         this.lobbyHubCommandsEnabled = lobbyHubCommandsEnabled;
@@ -92,33 +70,6 @@ public final class PluginConfig {
 
     public String discordUrl() {
         return discordUrl;
-    }
-
-    public RedisSettings redis() {
-        return redis;
-    }
-
-    public boolean publishPresence() {
-        return publishPresence;
-    }
-
-    /**
-     * Velocity server names that participate in network sync. Empty list = all servers.
-     */
-    public List<String> linkedServers() {
-        return linkedServers;
-    }
-
-    public boolean tabListEnabled() {
-        return tabListEnabled;
-    }
-
-    public boolean chatCompletionsEnabled() {
-        return chatCompletionsEnabled;
-    }
-
-    public String tabPlayerLine() {
-        return tabPlayerLine;
     }
 
     public boolean domainRoutingEnabled() {
@@ -196,41 +147,6 @@ public final class PluginConfig {
                 discordUrl = urlObj.toString();
             }
         }
-        RedisSettings redis = RedisSettings.fromYamlMap(root.get("redis"));
-        boolean publishPresence = true;
-        List<String> linkedServers = List.of();
-        boolean tabListEnabled = true;
-        boolean chatCompletionsEnabled = true;
-        String tabPlayerLine = "&a{player} &7({server})";
-        Object rawNetworkSync = root.get("network-sync");
-        if (rawNetworkSync instanceof Map<?, ?> networkSync) {
-            Object publishObj = networkSync.get("publish-presence");
-            if (publishObj instanceof Boolean bool) {
-                publishPresence = bool;
-            } else if (publishObj != null) {
-                publishPresence = Boolean.parseBoolean(publishObj.toString());
-            }
-            linkedServers = parseLinkedServers(networkSync.get("linked-servers"));
-            Object rawTab = networkSync.get("tablist");
-            if (rawTab instanceof Map<?, ?> tab) {
-                Object enabledObj = tab.get("enabled");
-                if (enabledObj instanceof Boolean bool) {
-                    tabListEnabled = bool;
-                } else if (enabledObj != null) {
-                    tabListEnabled = Boolean.parseBoolean(enabledObj.toString());
-                }
-                Object lineObj = tab.get("player-line");
-                if (lineObj != null) {
-                    tabPlayerLine = lineObj.toString();
-                }
-            }
-            Object completionsObj = networkSync.get("chat-completions");
-            if (completionsObj instanceof Boolean bool) {
-                chatCompletionsEnabled = bool;
-            } else if (completionsObj != null) {
-                chatCompletionsEnabled = Boolean.parseBoolean(completionsObj.toString());
-            }
-        }
         boolean domainRoutingEnabled = true;
         boolean discordCommandEnabled = true;
         boolean lobbyHubCommandsEnabled = true;
@@ -246,12 +162,6 @@ public final class PluginConfig {
                 discordMessage,
                 discordLinkText,
                 discordUrl,
-                redis,
-                publishPresence,
-                linkedServers,
-                tabListEnabled,
-                chatCompletionsEnabled,
-                tabPlayerLine,
                 domainRoutingEnabled,
                 discordCommandEnabled,
                 lobbyHubCommandsEnabled
@@ -268,27 +178,9 @@ public final class PluginConfig {
         return Boolean.parseBoolean(value.toString().trim());
     }
 
-    private static List<String> parseLinkedServers(Object raw) {
-        if (!(raw instanceof List<?> list)) {
-            return List.of();
-        }
-        List<String> servers = new ArrayList<>();
-        for (Object entry : list) {
-            if (entry == null) {
-                continue;
-            }
-            String name = entry.toString().trim();
-            if (!name.isEmpty()) {
-                servers.add(name);
-            }
-        }
-        return List.copyOf(servers);
-    }
-
     private static PluginConfig defaults() {
         return new PluginConfig(
-                "lobby", Map.of(), null, null, null, RedisSettings.defaults(), true, List.of(),
-                true, true, "&a{player} &7({server})", true, true, true
+                "lobby", Map.of(), null, null, null, true, true, true
         );
     }
 }

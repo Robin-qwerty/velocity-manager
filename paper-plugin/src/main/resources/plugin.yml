@@ -1,6 +1,0 @@
-name: robin-paper-bridge
-version: 1.0.0
-main: com.avesclub.network.paper.RobinPaperBridgePlugin
-api-version: '1.21'
-description: Redis chat and tab list sync for Paper backends.
-author: Robinaves

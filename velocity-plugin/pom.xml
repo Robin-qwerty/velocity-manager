@@ -12,13 +12,9 @@
 
     <artifactId>robin-velocity-manager</artifactId>
     <name>robin-velocity-manager</name>
-    <description>Velocity proxy plugin for routing, commands, and Redis presence.</description>
+    <description>Velocity proxy plugin for domain routing, utility commands, and per-domain MOTD.</description>
 
     <dependencies>
-        <dependency>
-            <groupId>com.avesclub.network</groupId>
-            <artifactId>robin-network-common</artifactId>
-        </dependency>
         <dependency>
             <groupId>com.velocitypowered</groupId>
             <artifactId>velocity-api</artifactId>
