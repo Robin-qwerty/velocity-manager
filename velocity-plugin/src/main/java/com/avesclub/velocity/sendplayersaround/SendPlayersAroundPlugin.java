@@ -47,6 +47,7 @@ public final class SendPlayersAroundPlugin {
     private final Logger logger;
     private final Path dataDirectory;
     private final MotdListener motdListener;
+    private final JoinLeaveListener joinLeaveListener;
     private MinecraftChannelIdentifier channelIdentifier;
     private PluginConfig config;
     private MotdConfig motdConfig;
@@ -57,12 +58,14 @@ public final class SendPlayersAroundPlugin {
         this.logger = logger;
         this.dataDirectory = dataDirectory;
         this.motdListener = new MotdListener(proxyServer, logger, dataDirectory);
+        this.joinLeaveListener = new JoinLeaveListener(proxyServer);
     }
 
     @Subscribe
     public void onProxyInitialize(ProxyInitializeEvent event) {
         loadConfig();
         proxyServer.getEventManager().register(this, motdListener);
+        proxyServer.getEventManager().register(this, joinLeaveListener);
 
         channelIdentifier = MinecraftChannelIdentifier.from(CHANNEL_NAME);
         proxyServer.getChannelRegistrar().register(channelIdentifier);
@@ -85,10 +88,11 @@ public final class SendPlayersAroundPlugin {
     private void loadConfig() {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
-            this.config = PluginConfig.load(dataDirectory);
-            logger.info("Loaded config: lobby '{}', {} domain route(s)",
+            this.config = PluginConfig.load(dataDirectory, logger);
+            logger.info("Loaded config: lobby '{}', {} domain route(s), join-leave {}",
                     config.lobbyServer(),
-                    config.domainServers().size());
+                    config.domainServers().size(),
+                    config.joinLeaveMessages().enabled() ? "enabled" : "disabled");
         } catch (IOException e) {
             logger.error("Failed to load config.yml; using defaults", e);
             this.config = new PluginConfig(
@@ -99,7 +103,8 @@ public final class SendPlayersAroundPlugin {
                     null,
                     true,
                     true,
-                    true
+                    true,
+                    PluginConfig.JoinLeaveMessages.disabled()
             );
         }
 
@@ -114,6 +119,7 @@ public final class SendPlayersAroundPlugin {
             this.motdConfig = MotdConfig.defaults();
         }
         motdListener.applyConfig(motdConfig);
+        joinLeaveListener.applyConfig(config);
     }
 
     @Subscribe
@@ -141,7 +147,8 @@ public final class SendPlayersAroundPlugin {
     private void reloadConfig(CommandSource feedback) {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
-            this.config = PluginConfig.load(dataDirectory);
+            this.config = PluginConfig.load(dataDirectory, logger);
+            joinLeaveListener.applyConfig(this.config);
         } catch (IOException e) {
             logger.error("Config reload failed", e);
             feedback.sendMessage(Component.text("Config reload failed; check the proxy log."));
@@ -163,6 +170,7 @@ public final class SendPlayersAroundPlugin {
                         + ", motd " + (motdConfig.enabled()
                                 ? "enabled (" + motdConfig.domainProfiles().size() + " domain profile(s))"
                                 : "disabled")
+                        + ", join-leave " + (config.joinLeaveMessages().enabled() ? "enabled" : "disabled")
                         + "."));
         String who = feedback instanceof Player p ? p.getUsername() : "console";
         logger.info("{} reloaded robin-velocity-manager config", who);

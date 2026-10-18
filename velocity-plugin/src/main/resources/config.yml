@@ -14,8 +14,26 @@ discord:
 
 # Individually toggle optional features without deleting their config sections above.
 # The MOTD feature's own master switch lives in motd.yml's top-level `enabled:` key,
-# not here (single source of truth).
+# not here (single source of truth). Join/leave messages use join-leave-messages.enabled.
 features:
   domain-routing: true
   discord-command: true
   lobby-hub-commands: true
+
+# Proxy-side join and quit chat. A server only participates if it is listed in
+# included-servers; every other server keeps its own backend messages.
+# Switching between servers in the same group does not announce. An included server
+# that is not listed under groups is its own group of one.
+# %player% is the username. Legacy & codes and MiniMessage tags both work.
+join-leave-messages:
+  enabled: false
+  join-message: "&8[&a+&8] &a%player%"
+  quit-message: "&8[&c-&8] &c%player%"
+  included-servers:
+    - lobby
+    - survival
+    - survival-nether
+  groups:
+    survival:
+      - survival
+      - survival-nether

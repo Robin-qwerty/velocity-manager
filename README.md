@@ -5,6 +5,7 @@ Standalone Velocity proxy plugin:
 - **Domain routing** — send players to a specific backend server based on the hostname they used to connect.
 - **Per-domain MOTD** — different server-list description, hover box, player count, fake version, and favicon per hostname, with feature toggles throughout so unused parts cost nothing.
 - **Utility commands** — `/find`, `/lobby`, `/hub`, `/discord`.
+- **Grouped join and leave messages** — proxy-side join/quit chat for included servers, silent while a player stays inside a server group.
 - **Plugin-message transfers** — any backend plugin can move a player to another server over a plugin-message channel.
 
 ## Build
@@ -56,6 +57,28 @@ features:
 - **`lobby-hub-commands`** — enables/disables `/lobby` and `/hub`.
 - `/find` and `/velocitymanager reload` are always available.
 - The MOTD feature (below) has its own master switch in `motd.yml`, not here.
+- Join/leave messages use `join-leave-messages.enabled`, not this section.
+
+### Join and leave messages (`plugins/robin-velocity-manager/config.yml`)
+
+The proxy sends a join or quit line when a player enters or leaves a server group. Only players who are currently on a server in that group see it. Switching between servers in the same group does not announce. Servers that are not listed in `included-servers` are left alone, so those backends can keep their own join and leave messages.
+
+An included server that is not listed under `groups` is its own group of one. A server listed in a group but missing from `included-servers` is ignored. A server listed in two groups stays in the first one. Names are matched case-insensitively. `%player%` is the username. Legacy `&` codes and MiniMessage tags both work. A blank message is not sent.
+
+```yaml
+join-leave-messages:
+  enabled: false
+  join-message: "&8[&a+&8] &a%player%"
+  quit-message: "&8[&c-&8] &c%player%"
+  included-servers:
+    - lobby
+    - survival
+    - survival-nether
+  groups:
+    survival:
+      - survival
+      - survival-nether
+```
 
 ## Per-domain MOTD (`plugins/robin-velocity-manager/motd.yml`)
 
