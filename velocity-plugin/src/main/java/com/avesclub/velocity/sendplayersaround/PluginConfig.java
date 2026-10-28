@@ -35,6 +35,7 @@ public final class PluginConfig {
     private final boolean discordCommandEnabled;
     private final boolean lobbyHubCommandsEnabled;
     private final JoinLeaveMessages joinLeaveMessages;
+    private final NetworkPlayers networkPlayers;
 
     public PluginConfig(
             String lobbyServer,
@@ -45,7 +46,8 @@ public final class PluginConfig {
             boolean domainRoutingEnabled,
             boolean discordCommandEnabled,
             boolean lobbyHubCommandsEnabled,
-            JoinLeaveMessages joinLeaveMessages
+            JoinLeaveMessages joinLeaveMessages,
+            NetworkPlayers networkPlayers
     ) {
         this.lobbyServer = lobbyServer == null || lobbyServer.isBlank() ? "lobby" : lobbyServer.trim();
         this.domainServers = domainServers == null ? Map.of() : Map.copyOf(domainServers);
@@ -59,6 +61,7 @@ public final class PluginConfig {
         this.discordCommandEnabled = discordCommandEnabled;
         this.lobbyHubCommandsEnabled = lobbyHubCommandsEnabled;
         this.joinLeaveMessages = joinLeaveMessages == null ? JoinLeaveMessages.disabled() : joinLeaveMessages;
+        this.networkPlayers = networkPlayers == null ? NetworkPlayers.disabled() : networkPlayers;
     }
 
     public String lobbyServer() {
@@ -95,6 +98,10 @@ public final class PluginConfig {
 
     public JoinLeaveMessages joinLeaveMessages() {
         return joinLeaveMessages;
+    }
+
+    public NetworkPlayers networkPlayers() {
+        return networkPlayers;
     }
 
     public static void ensureDefaultFile(Path dataDirectory, Class<?> resourceAnchor) throws IOException {
@@ -178,7 +185,8 @@ public final class PluginConfig {
                 domainRoutingEnabled,
                 discordCommandEnabled,
                 lobbyHubCommandsEnabled,
-                parseJoinLeave(root.get("join-leave-messages"), logger)
+                parseJoinLeave(root.get("join-leave-messages"), logger),
+                parseNetworkPlayers(root.get("network-players"), logger)
         );
     }
 
@@ -231,6 +239,62 @@ public final class PluginConfig {
         return new JoinLeaveMessages(enabled, joinMessage, quitMessage, Set.copyOf(included), Map.copyOf(serverToGroup));
     }
 
+    private static NetworkPlayers parseNetworkPlayers(Object raw, Logger logger) {
+        if (!(raw instanceof Map<?, ?> section)) {
+            return NetworkPlayers.disabled();
+        }
+        boolean enabled = boolOrDefault(section.get("enabled"), false);
+        Map<?, ?> redis = section.get("redis") instanceof Map<?, ?> r ? r : Map.of();
+        String host = stringOrDefault(redis.get("host"), NetworkPlayers.DEFAULT_HOST);
+        int port = intOrDefault(redis.get("port"), NetworkPlayers.DEFAULT_PORT);
+        String username = stringOrDefault(redis.get("username"), "");
+        String password = stringOrDefault(redis.get("password"), "");
+        int database = Math.max(0, intOrDefault(redis.get("database"), 0));
+        String proxyId = stringOrDefault(section.get("proxy-id"), "");
+        int publishInterval = Math.max(1, intOrDefault(section.get("publish-interval-seconds"),
+                NetworkPlayers.DEFAULT_PUBLISH_INTERVAL_SECONDS));
+        int keyTtl = intOrDefault(section.get("key-ttl-seconds"), NetworkPlayers.DEFAULT_KEY_TTL_SECONDS);
+        String keyPrefix = stringOrDefault(section.get("key-prefix"), NetworkPlayers.DEFAULT_KEY_PREFIX);
+
+        if (enabled && proxyId.isEmpty()) {
+            if (logger != null) {
+                logger.warn("network-players.proxy-id is empty; network player count disabled");
+            }
+            enabled = false;
+        }
+        if (keyTtl <= publishInterval) {
+            int fixed = publishInterval * 3;
+            if (enabled && logger != null) {
+                logger.warn("network-players.key-ttl-seconds ({}) must be greater than publish-interval-seconds ({}); using {}",
+                        keyTtl, publishInterval, fixed);
+            }
+            keyTtl = fixed;
+        }
+        return new NetworkPlayers(enabled, host, port, username, password, database, proxyId,
+                publishInterval, keyTtl, keyPrefix);
+    }
+
+    private static String stringOrDefault(Object value, String fallback) {
+        if (value == null) {
+            return fallback;
+        }
+        return value.toString().trim();
+    }
+
+    private static int intOrDefault(Object value, int fallback) {
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value == null) {
+            return fallback;
+        }
+        try {
+            return Integer.parseInt(value.toString().trim());
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
+    }
+
     private static String messageOrDefault(Object value, String fallback) {
         if (value == null) {
             return fallback;
@@ -272,7 +336,8 @@ public final class PluginConfig {
 
     private static PluginConfig defaults() {
         return new PluginConfig(
-                "lobby", Map.of(), null, null, null, true, true, true, JoinLeaveMessages.disabled()
+                "lobby", Map.of(), null, null, null, true, true, true, JoinLeaveMessages.disabled(),
+                NetworkPlayers.disabled()
         );
     }
 
@@ -339,6 +404,102 @@ public final class PluginConfig {
                 return Optional.of(group);
             }
             return Optional.of(SINGLE_SERVER_SCOPE_PREFIX + key);
+        }
+    }
+
+    /**
+     * Shared online count across proxies. Each proxy writes its own count to Redis under
+     * {@code key-prefix + proxy-id} with a TTL, and the server-list ping shows the sum of all keys.
+     */
+    public static final class NetworkPlayers {
+        static final String DEFAULT_HOST = "127.0.0.1";
+        static final int DEFAULT_PORT = 6379;
+        static final int DEFAULT_PUBLISH_INTERVAL_SECONDS = 3;
+        static final int DEFAULT_KEY_TTL_SECONDS = 10;
+        static final String DEFAULT_KEY_PREFIX = "avesclub:players:";
+
+        private final boolean enabled;
+        private final String host;
+        private final int port;
+        private final String username;
+        private final String password;
+        private final int database;
+        private final String proxyId;
+        private final int publishIntervalSeconds;
+        private final int keyTtlSeconds;
+        private final String keyPrefix;
+
+        NetworkPlayers(
+                boolean enabled,
+                String host,
+                int port,
+                String username,
+                String password,
+                int database,
+                String proxyId,
+                int publishIntervalSeconds,
+                int keyTtlSeconds,
+                String keyPrefix
+        ) {
+            this.enabled = enabled;
+            this.host = host == null || host.isBlank() ? DEFAULT_HOST : host;
+            this.port = port <= 0 ? DEFAULT_PORT : port;
+            this.username = username == null ? "" : username;
+            this.password = password == null ? "" : password;
+            this.database = database;
+            this.proxyId = proxyId == null ? "" : proxyId;
+            this.publishIntervalSeconds = publishIntervalSeconds;
+            this.keyTtlSeconds = keyTtlSeconds;
+            this.keyPrefix = keyPrefix == null || keyPrefix.isEmpty() ? DEFAULT_KEY_PREFIX : keyPrefix;
+        }
+
+        public static NetworkPlayers disabled() {
+            return new NetworkPlayers(false, DEFAULT_HOST, DEFAULT_PORT, "", "", 0, "",
+                    DEFAULT_PUBLISH_INTERVAL_SECONDS, DEFAULT_KEY_TTL_SECONDS, DEFAULT_KEY_PREFIX);
+        }
+
+        public boolean enabled() {
+            return enabled;
+        }
+
+        public String host() {
+            return host;
+        }
+
+        public int port() {
+            return port;
+        }
+
+        public String username() {
+            return username;
+        }
+
+        public String password() {
+            return password;
+        }
+
+        public int database() {
+            return database;
+        }
+
+        public String proxyId() {
+            return proxyId;
+        }
+
+        public int publishIntervalSeconds() {
+            return publishIntervalSeconds;
+        }
+
+        public int keyTtlSeconds() {
+            return keyTtlSeconds;
+        }
+
+        public String keyPrefix() {
+            return keyPrefix;
+        }
+
+        public String ownKey() {
+            return keyPrefix + proxyId;
         }
     }
 }

@@ -34,13 +34,15 @@ final class MotdListener {
     private final ProxyServer proxyServer;
     private final Logger logger;
     private final Path dataDirectory;
+    private final NetworkPlayerCounter networkPlayers;
     private final Map<String, Favicon> faviconCache = new ConcurrentHashMap<>();
     private volatile MotdConfig config = MotdConfig.defaults();
 
-    MotdListener(ProxyServer proxyServer, Logger logger, Path dataDirectory) {
+    MotdListener(ProxyServer proxyServer, Logger logger, Path dataDirectory, NetworkPlayerCounter networkPlayers) {
         this.proxyServer = proxyServer;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
+        this.networkPlayers = networkPlayers;
     }
 
     void applyConfig(MotdConfig newConfig) {
@@ -81,14 +83,24 @@ final class MotdListener {
     @Subscribe
     public void onProxyPing(ProxyPingEvent event) {
         MotdConfig cfg = this.config;
-        if (cfg == null || !cfg.enabled()) {
+        boolean motdEnabled = cfg != null && cfg.enabled();
+        boolean networkEnabled = networkPlayers.enabled();
+        if (!motdEnabled && !networkEnabled) {
+            return;
+        }
+
+        ServerPing.Builder builder = event.getPing().asBuilder();
+        if (networkEnabled) {
+            // Becomes the ping's online count and the <online> placeholder below.
+            builder.onlinePlayers(networkPlayers.onlineCount());
+        }
+        if (!motdEnabled) {
+            event.setPing(builder.build());
             return;
         }
 
         String host = HostUtil.hostFromConnection(event.getConnection());
         MotdProfile profile = cfg.resolve(host);
-
-        ServerPing.Builder builder = event.getPing().asBuilder();
 
         int online = profile.playerCount().onlineOverride().enabled()
                 ? profile.playerCount().onlineOverride().value() : builder.getOnlinePlayers();

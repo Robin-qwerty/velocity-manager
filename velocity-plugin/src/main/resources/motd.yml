@@ -16,7 +16,8 @@
 #
 # Placeholders (substituted as plain text BEFORE color/MiniMessage parsing) - usable in
 # description.lines, hover.lines, and version.name.text:
-#   <online>              network-wide online count (or this profile's online-override value)
+#   <online>              this proxy's online count, or the sum of all proxies when
+#                         network-players is enabled in config.yml (online-override still wins)
 #   <max>                 network-wide max count (or this profile's max-override value)
 #   <online_SERVERNAME>   live online count on one backend server, e.g. <online_lobby>,
 #                         <online_bedwars> - generated automatically for every server

@@ -6,6 +6,7 @@ Standalone Velocity proxy plugin:
 - **Per-domain MOTD** — different server-list description, hover box, player count, fake version, and favicon per hostname, with feature toggles throughout so unused parts cost nothing.
 - **Utility commands** — `/find`, `/lobby`, `/hub`, `/discord`.
 - **Grouped join and leave messages** — proxy-side join/quit chat for included servers, silent while a player stays inside a server group.
+- **Network online count** — several proxies (for example Java and Geyser/Bedrock) share their player counts through Redis so every server list shows the total.
 - **Plugin-message transfers** — any backend plugin can move a player to another server over a plugin-message channel.
 
 ## Build
@@ -80,6 +81,42 @@ join-leave-messages:
       - survival-nether
 ```
 
+### Network online count (`plugins/robin-velocity-manager/config.yml`)
+
+Each Velocity proxy only knows its own players. With this enabled, every proxy writes its count to Redis, and the server-list ping on every proxy shows the sum of all proxies. This applies to the numeric online count in the ping (so Geyser's `passthrough-player-counts` shows it too) and to `<online>` in `motd.yml`. It works whether or not `motd.yml` is enabled.
+
+```yaml
+network-players:
+  enabled: false
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    username: ""
+    password: ""
+    database: 0
+  proxy-id: java
+  publish-interval-seconds: 3
+  key-ttl-seconds: 10
+  key-prefix: "avesclub:players:"
+```
+
+- Every proxy uses the same `redis` settings and its own **unique** `proxy-id` (for example `java` and `bedrock`).
+- Every `publish-interval-seconds` the proxy runs `SET {key-prefix}{proxy-id} <count> EX {key-ttl-seconds}`. If a proxy stops, its key expires and the others stop counting it. `key-ttl-seconds` must be greater than the interval.
+- The ping total is this proxy's live count plus the values of all other keys under `key-prefix` (found with `SCAN`, cached for about one second).
+- If Redis is unreachable, or this proxy's own key is missing, the ping shows this proxy's own count. Redis is only touched on a background thread, so a slow or dead Redis never delays a ping. The log shows one warning when Redis goes away and one line when it comes back.
+- `<max>` is not summed. It stays Velocity's `show-max-players` or the profile's `max-override`.
+- `<online_SERVERNAME>` stays this proxy's own backend count.
+- A `motd.yml` profile with `online-override.enabled: true` still shows its override.
+- TLS is not used. Keep Redis on a private network.
+
+Redis ACL for a dedicated user (database 0; any other database also needs `+select`):
+
+```
+ACL SETUSER avesplayers on >CHANGE_ME resetkeys ~avesclub:players:* resetchannels -@all +set +get +scan +ping
+```
+
+The Redis client (Jedis) is shaded and relocated to `com.avesclub.velocity.libs.jedis`, so it does not clash with LuckPerms or other plugins that bundle Jedis.
+
 ## Per-domain MOTD (`plugins/robin-velocity-manager/motd.yml`)
 
 Shows a different server-list description, hover box, player count, fake version, and favicon
@@ -137,7 +174,8 @@ domains:
   tags in the same string — legacy codes are converted to MiniMessage tags first, so
   `"&aHello <gradient:#00c6ff:#0072ff>World</gradient>"` works as-is.
 - **Placeholders** (usable in `description.lines`, `hover.lines`, `version.name.text`):
-  - `<online>` / `<max>` — network-wide online/max count (or this profile's override value)
+  - `<online>` / `<max>` — this proxy's online/max count, or this profile's override value.
+    With `network-players` enabled, `<online>` is the total across all proxies.
   - `<online_SERVERNAME>` — live online count on one backend server, e.g. `<online_lobby>`,
     `<online_bedwars>` — generated automatically for every server in `velocity.toml`
   - `<newline>` — splits one YAML string into an extra display line

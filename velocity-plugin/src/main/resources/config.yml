@@ -37,3 +37,27 @@ join-leave-messages:
     survival:
       - survival
       - survival-nether
+
+# Shared online count across proxies (for example a Java proxy and a Geyser/Bedrock proxy).
+# Each proxy writes its own player count to Redis; the server-list ping on every proxy shows
+# the sum. This changes the numeric online count and <online> in motd.yml. <max> and
+# <online_SERVERNAME> are not changed. A profile's online-override in motd.yml still wins.
+# Give every proxy the same redis settings and a different proxy-id.
+network-players:
+  enabled: false
+  redis:
+    host: 127.0.0.1
+    port: 6379
+    # ACL user that only needs: +set +get +scan +ping on ~avesclub:players:*
+    username: ""
+    password: ""
+    # Anything other than 0 also needs +select in the ACL.
+    database: 0
+    # TLS off
+  # Stable id for THIS proxy. Must be unique per proxy. Examples: java, bedrock
+  proxy-id: java
+  # How often this proxy writes its own count.
+  publish-interval-seconds: 3
+  # Key TTL. If a proxy dies, its count disappears instead of sticking. Must be greater than the interval.
+  key-ttl-seconds: 10
+  key-prefix: "avesclub:players:"

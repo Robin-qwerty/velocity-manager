@@ -9,6 +9,7 @@ import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.connection.PluginMessageEvent;
 import com.velocitypowered.api.event.player.PlayerChooseInitialServerEvent;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
+import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.Player;
@@ -47,6 +48,7 @@ public final class SendPlayersAroundPlugin {
     private final Logger logger;
     private final Path dataDirectory;
     private final MotdListener motdListener;
+    private final NetworkPlayerCounter networkPlayerCounter;
     private final JoinLeaveListener joinLeaveListener;
     private MinecraftChannelIdentifier channelIdentifier;
     private PluginConfig config;
@@ -57,7 +59,8 @@ public final class SendPlayersAroundPlugin {
         this.proxyServer = proxyServer;
         this.logger = logger;
         this.dataDirectory = dataDirectory;
-        this.motdListener = new MotdListener(proxyServer, logger, dataDirectory);
+        this.networkPlayerCounter = new NetworkPlayerCounter(proxyServer, logger);
+        this.motdListener = new MotdListener(proxyServer, logger, dataDirectory, networkPlayerCounter);
         this.joinLeaveListener = new JoinLeaveListener(proxyServer);
     }
 
@@ -85,14 +88,20 @@ public final class SendPlayersAroundPlugin {
         logger.info("Registered plugin messaging channel {}", CHANNEL_NAME);
     }
 
+    @Subscribe
+    public void onProxyShutdown(ProxyShutdownEvent event) {
+        networkPlayerCounter.shutdown();
+    }
+
     private void loadConfig() {
         try {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
             this.config = PluginConfig.load(dataDirectory, logger);
-            logger.info("Loaded config: lobby '{}', {} domain route(s), join-leave {}",
+            logger.info("Loaded config: lobby '{}', {} domain route(s), join-leave {}, network players {}",
                     config.lobbyServer(),
                     config.domainServers().size(),
-                    config.joinLeaveMessages().enabled() ? "enabled" : "disabled");
+                    config.joinLeaveMessages().enabled() ? "enabled" : "disabled",
+                    config.networkPlayers().enabled() ? "enabled" : "disabled");
         } catch (IOException e) {
             logger.error("Failed to load config.yml; using defaults", e);
             this.config = new PluginConfig(
@@ -104,7 +113,8 @@ public final class SendPlayersAroundPlugin {
                     true,
                     true,
                     true,
-                    PluginConfig.JoinLeaveMessages.disabled()
+                    PluginConfig.JoinLeaveMessages.disabled(),
+                    PluginConfig.NetworkPlayers.disabled()
             );
         }
 
@@ -120,6 +130,7 @@ public final class SendPlayersAroundPlugin {
         }
         motdListener.applyConfig(motdConfig);
         joinLeaveListener.applyConfig(config);
+        networkPlayerCounter.applyConfig(config);
     }
 
     @Subscribe
@@ -149,6 +160,7 @@ public final class SendPlayersAroundPlugin {
             PluginConfig.ensureDefaultFile(dataDirectory, SendPlayersAroundPlugin.class);
             this.config = PluginConfig.load(dataDirectory, logger);
             joinLeaveListener.applyConfig(this.config);
+            networkPlayerCounter.applyConfig(this.config);
         } catch (IOException e) {
             logger.error("Config reload failed", e);
             feedback.sendMessage(Component.text("Config reload failed; check the proxy log."));
@@ -171,6 +183,9 @@ public final class SendPlayersAroundPlugin {
                                 ? "enabled (" + motdConfig.domainProfiles().size() + " domain profile(s))"
                                 : "disabled")
                         + ", join-leave " + (config.joinLeaveMessages().enabled() ? "enabled" : "disabled")
+                        + ", network players " + (config.networkPlayers().enabled()
+                                ? "enabled (proxy-id '" + config.networkPlayers().proxyId() + "')"
+                                : "disabled")
                         + "."));
         String who = feedback instanceof Player p ? p.getUsername() : "console";
         logger.info("{} reloaded robin-velocity-manager config", who);
